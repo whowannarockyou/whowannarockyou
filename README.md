@@ -58,11 +58,17 @@ python get_access_token.py
 - GitHub Actions에 별도 스케줄(예: 매월 1일)로 `refresh_token.py`를 돌리고,
   결과 토큰을 Secrets에 자동 업데이트하는 워크플로우를 추가하면 완전 무인화할 수 있습니다.
 
-## 3단계: 이미지 호스팅 계정 (imgbb)
+## 3단계: 이미지 호스팅 계정 (imgbb) + 관련 이미지 검색 (Pexels)
 
 1. https://api.imgbb.com 접속 → 무료 API 키 발급
 2. `config.py`의 `IMGBB_API_KEY`에 입력
+3. https://www.pexels.com/api 접속 → 무료 가입 → API 키 발급
+4. `config.py`의 `PEXELS_API_KEY`에 입력
 
+> 이 두 가지는 역할이 달라요: **imgbb**는 우리가 만든 카드뉴스 이미지를 인스타그램이
+> 읽을 수 있는 공개 URL로 올리는 용도이고, **Pexels**는 기사에 자체 사진이 없을 때
+> 헤드라인 키워드로 관련 무료 스톡 이미지를 찾아오는 용도예요.
+>
 > 운영 규모가 커지면 imgbb 대신 AWS S3나 Cloudinary로 교체하는 걸 권장합니다.
 > `post_instagram.py`의 `upload_image()` 함수만 교체하면 됩니다.
 
@@ -124,6 +130,24 @@ insta-news-bot/
 ├── requirements.txt
 └── .github/workflows/post-news.yml  # 자동 스케줄링
 ```
+
+## 디자인: 캐러셀(2장) 카드뉴스
+
+토스 스타일(다크 배경 + 볼드 화이트 타이포 + 포인트 컬러)로 디자인되어 있고,
+게시물마다 이미지 2장이 캐러셀로 올라갑니다.
+
+- **1번 슬라이드(커버)**: 기사 자체 사진(있으면 자동 삽입) → 없으면 **Pexels에서 헤드라인 키워드로 관련 무료 이미지 자동 검색** → 그마저 없으면 텍스트만 + 핵심 불릿 3개
+- **2번 슬라이드(상세)**: 소제목 + 번호 매긴 상세 설명 4개
+
+포인트 컬러는 `generate_card.py` 상단의 `ACCENT = (124, 58, 237)` 값을 바꾸면
+전체 디자인의 강조색이 한번에 바뀝니다 (RGB 튜플).
+
+### 한글 폰트 준비 (필수)
+`fonts/` 폴더에 아래 두 파일이 필요합니다:
+- `NanumGothicExtraBold.ttf` (헤드라인/태그용, 없으면 `NanumGothicBold.ttf`로 자동 대체)
+- `NanumGothic.ttf` (본문용)
+
+"나눔고딕 다운로드"로 검색해서 받은 후 `fonts/` 폴더에 넣어주세요. 없으면 카드에 한글이 깨집니다.
 
 ## 확장 아이디어
 - 언론사 여러 곳 RSS를 리스트로 관리해서 랜덤/순차로 소스 다양화
