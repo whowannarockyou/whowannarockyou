@@ -135,27 +135,27 @@ def generate_cover_card(
     draw = ImageDraw.Draw(img)
 
     tag_y = 60 if photo_h else 90
-    _draw_pill_tag(draw, tag_text, (60, tag_y), font_tag)
+    _draw_pill_tag(draw, tag_text, (100, tag_y), font_tag)
 
     # 헤드라인 (사진 있으면 사진 아래, 없으면 중상단부터)
     y = (photo_h - 40) if photo_h else 260
-    wrapped_headline = textwrap.wrap(headline, width=10)
+    wrapped_headline = textwrap.wrap(headline, width=9)
     for line in wrapped_headline:
-        draw.text((60, y), line, font=font_headline, fill=TEXT_MAIN)
+        draw.text((100, y), line, font=font_headline, fill=TEXT_MAIN)
         y += 88
 
     y += 30
     for b in bullets:
         if not b:
             continue
-        draw.ellipse([60, y + 12, 68, y + 20], fill=ACCENT)
-        wrapped_b = textwrap.wrap(b, width=22)
+        draw.ellipse([100, y + 12, 108, y + 20], fill=ACCENT)
+        wrapped_b = textwrap.wrap(b, width=20)
         for line in wrapped_b:
-            draw.text((84, y), line, font=font_bullet, fill=TEXT_SUB)
+            draw.text((124, y), line, font=font_bullet, fill=TEXT_SUB)
             y += 46
         y += 10
 
-    draw.text((60, H - 70), f"출처: {source_name}", font=font_source, fill=TEXT_MUTED)
+    draw.text((100, H - 70), f"출처: {source_name}", font=font_source, fill=TEXT_MUTED)
     _draw_page_dots(draw, active_index=0)
 
     img.save(output_path, quality=95)
@@ -178,23 +178,23 @@ def generate_detail_card(
     font_num = _font(FONT_BOLD, 32)
     font_tag = _font(FONT_BOLD, 26)
 
-    _draw_pill_tag(draw, tag_text, (80, 90), font_tag)
+    _draw_pill_tag(draw, tag_text, (100, 90), font_tag)
 
     y = 190
-    draw.text((80, y), detail_title, font=font_title, fill=TEXT_MAIN)
+    draw.text((100, y), detail_title, font=font_title, fill=TEXT_MAIN)
     y += 100
 
     for i, point in enumerate([p for p in detail_points if p], 1):
         circle_r = 20
-        draw.ellipse([80, y, 80 + circle_r * 2, y + circle_r * 2], outline=ACCENT, width=3)
+        draw.ellipse([100, y, 100 + circle_r * 2, y + circle_r * 2], outline=ACCENT, width=3)
         num_bbox = draw.textbbox((0, 0), str(i), font=font_num)
         nw = num_bbox[2] - num_bbox[0]
-        draw.text((80 + circle_r - nw / 2, y + circle_r - 22), str(i), font=font_num, fill=ACCENT)
+        draw.text((100 + circle_r - nw / 2, y + circle_r - 22), str(i), font=font_num, fill=ACCENT)
 
-        wrapped = textwrap.wrap(point, width=22)
+        wrapped = textwrap.wrap(point, width=19)
         ty = y - 2
         for line in wrapped:
-            draw.text((140, ty), line, font=font_body, fill=TEXT_SUB)
+            draw.text((160, ty), line, font=font_body, fill=TEXT_SUB)
             ty += 46
         y = max(ty, y + circle_r * 2 + 10) + 30
 
