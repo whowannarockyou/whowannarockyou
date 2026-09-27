@@ -22,7 +22,8 @@ from config import (
     SOURCE_NAME,
     IG_USER_ID,
     IG_ACCESS_TOKEN,
-    IMGBB_API_KEY,
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_UPLOAD_PRESET,
     PEXELS_API_KEY,
     INSTAGRAM_HANDLE,
     BRAND_NAME,
@@ -54,15 +55,14 @@ def run():
     print("[3/8] Claude로 카드뉴스 콘텐츠 생성 중...")
     content = summarize_for_card(target.title, target.summary)
 
-    # 기사에 사진이 없으면 헤드라인 키워드로 관련 무료 스톡 이미지를 검색
-    image_url = target.image_url
-    if not image_url:
-        print("  → 기사에 사진이 없어 관련 이미지를 검색합니다...")
-        image_url = search_related_photo(content["headline"], target.title, PEXELS_API_KEY)
-        if image_url:
-            print(f"  → 관련 이미지 찾음: {image_url}")
-        else:
-            print("  → 관련 이미지를 못 찾아 텍스트만으로 진행합니다.")
+    # 원문 기사 사진은 저해상도+통신사 워터마크 문제가 있어 사용하지 않고,
+    # 항상 Pexels에서 헤드라인 키워드 기반 고화질 무료 스톡 이미지를 검색해서 사용
+    print("  → Pexels에서 관련 이미지를 검색합니다...")
+    image_url = search_related_photo(content["headline"], target.title, PEXELS_API_KEY)
+    if image_url:
+        print(f"  → 관련 이미지 찾음: {image_url}")
+    else:
+        print("  → 관련 이미지를 못 찾아 텍스트만으로 진행합니다.")
 
     os.makedirs("output", exist_ok=True)
     slug = abs(hash(target.link))
@@ -96,9 +96,9 @@ def run():
     )
 
     print("[7/8] 이미지 3장 업로드 중...")
-    cover_url = upload_image(cover_path, IMGBB_API_KEY)
-    detail_url = upload_image(detail_path, IMGBB_API_KEY)
-    closing_url = upload_image(closing_path, IMGBB_API_KEY)
+    cover_url = upload_image(cover_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
+    detail_url = upload_image(detail_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
+    closing_url = upload_image(closing_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
     print(f"  → 커버: {cover_url}")
     print(f"  → 상세: {detail_url}")
     print(f"  → 클로징: {closing_url}")
