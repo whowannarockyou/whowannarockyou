@@ -1,13 +1,13 @@
 """
-전체 파이프라인 실행 스크립트 (캐러셀 2장 버전).
+전체 파이프라인 실행 스크립트 (캐러셀 3장 버전).
 
 흐름:
 1. RSS에서 최신 기사 목록 수집
 2. 아직 게시하지 않은 기사 중 첫 번째 선택
 3. Claude API로 커버용 헤드라인/불릿 + 상세용 포인트 생성
-4. Pillow로 커버 카드(사진+헤드라인) + 상세 카드(설명) 2장 생성
-5. 두 이미지를 호스팅에 업로드해 공개 URL 확보
-6. Instagram Graph API로 캐러셀(2장) 게시
+4. Pillow로 커버 카드(사진+헤드라인) + 상세 카드(설명) + 클로징 카드(CTA) 3장 생성
+5. 세 이미지를 호스팅에 업로드해 공개 URL 확보
+6. Instagram Graph API로 캐러셀(3장) 게시
 7. 게시 이력 저장 (중복 방지)
 
 실행: python3 main.py
@@ -24,17 +24,20 @@ from config import (
     IG_ACCESS_TOKEN,
     IMGBB_API_KEY,
     PEXELS_API_KEY,
+    INSTAGRAM_HANDLE,
+    BRAND_NAME,
+    CTA_TAGLINE,
 )
 from fetch_news import fetch_latest_articles
 from summarize import summarize_for_card, build_caption
-from generate_card import generate_cover_card, generate_detail_card
+from generate_card import generate_cover_card, generate_detail_card, generate_closing_card
 from post_instagram import upload_image, post_carousel
 from history import load_history, save_to_history
 from stock_image import search_related_photo
 
 
 def run():
-    print("[1/7] 최신 기사 수집 중...")
+    print("[1/8] 최신 기사 수집 중...")
     articles = fetch_latest_articles(RSS_FEED_URL, limit=10)
     if not articles:
         print("가져올 기사가 없습니다. RSS URL을 확인하세요.")
@@ -46,9 +49,9 @@ def run():
         print("게시할 새 기사가 없습니다 (모두 이미 게시됨).")
         return
 
-    print(f"[2/7] 선택된 기사: {target.title}")
+    print(f"[2/8] 선택된 기사: {target.title}")
 
-    print("[3/7] Claude로 카드뉴스 콘텐츠 생성 중...")
+    print("[3/8] Claude로 카드뉴스 콘텐츠 생성 중...")
     content = summarize_for_card(target.title, target.summary)
 
     # 기사에 사진이 없으면 헤드라인 키워드로 관련 무료 스톡 이미지를 검색
@@ -64,7 +67,7 @@ def run():
     os.makedirs("output", exist_ok=True)
     slug = abs(hash(target.link))
 
-    print("[4/7] 커버 카드(사진+헤드라인) 생성 중...")
+    print("[4/8] 커버 카드(사진+헤드라인) 생성 중...")
     cover_path = f"output/cover_{slug}.jpg"
     generate_cover_card(
         headline=content["headline"],
@@ -72,9 +75,10 @@ def run():
         source_name=SOURCE_NAME,
         image_url=image_url,
         output_path=cover_path,
+        instagram_handle=INSTAGRAM_HANDLE,
     )
 
-    print("[5/7] 상세 카드(설명) 생성 중...")
+    print("[5/8] 상세 카드(설명) 생성 중...")
     detail_path = f"output/detail_{slug}.jpg"
     generate_detail_card(
         detail_title=content.get("detail_title", "자세히 보기"),
@@ -82,16 +86,27 @@ def run():
         output_path=detail_path,
     )
 
-    print("[6/7] 이미지 2장 업로드 중...")
+    print("[6/8] 클로징 카드(CTA) 생성 중...")
+    closing_path = f"output/closing_{slug}.jpg"
+    generate_closing_card(
+        brand_name=BRAND_NAME,
+        tagline=CTA_TAGLINE,
+        output_path=closing_path,
+        instagram_handle=INSTAGRAM_HANDLE,
+    )
+
+    print("[7/8] 이미지 3장 업로드 중...")
     cover_url = upload_image(cover_path, IMGBB_API_KEY)
     detail_url = upload_image(detail_path, IMGBB_API_KEY)
+    closing_url = upload_image(closing_path, IMGBB_API_KEY)
     print(f"  → 커버: {cover_url}")
     print(f"  → 상세: {detail_url}")
+    print(f"  → 클로징: {closing_url}")
 
-    print("[7/7] Instagram에 캐러셀 게시 중...")
+    print("[8/8] Instagram에 캐러셀 게시 중...")
     caption = build_caption(target.title, target.link, SOURCE_NAME)
     media_id = post_carousel(
-        image_urls=[cover_url, detail_url],
+        image_urls=[cover_url, detail_url, closing_url],
         caption=caption,
         ig_user_id=IG_USER_ID,
         access_token=IG_ACCESS_TOKEN,
