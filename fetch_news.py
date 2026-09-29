@@ -11,9 +11,17 @@ RSS 피드에서 최신 뉴스 기사를 가져오는 모듈.
 - KBS 전체        : http://world.kbs.co.kr/rss/rss_news.htm?lang=k
 """
 
+import re
 import feedparser
+import requests
 from dataclasses import dataclass
 from typing import Optional
+
+# XML 1.0 규격상 허용되지 않는 제어문자 (언론사 서버가 가끔 이런 문자를 이스케이프 없이
+# 그대로 흘려보내서 "not well-formed (invalid token)" 에러가 나는 경우가 있음)
+_INVALID_XML_CHARS = re.compile(
+    "[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]"
+)
 
 
 @dataclass
@@ -27,10 +35,27 @@ class Article:
 
 def fetch_latest_articles(feed_url: str, limit: int = 10) -> list[Article]:
     """RSS 피드를 파싱해서 최신 기사 목록을 반환합니다."""
+    feed = None
+
+    # 1차: feedparser로 바로 파싱 시도 (대부분의 경우 이걸로 충분)
     feed = feedparser.parse(feed_url)
 
-    if feed.bozo:
-        print(f"[경고] RSS 파싱 중 문제가 발생했을 수 있습니다: {feed.bozo_exception}")
+    # 2차: 파싱에 문제가 있었거나 기사를 하나도 못 가져왔으면,
+    # 직접 다운로드해서 깨진 제어문자를 제거한 뒤 재시도
+    if feed.bozo or not feed.entries:
+        print(f"[경고] RSS 1차 파싱 실패 또는 결과 없음, 정제 후 재시도합니다: {feed.bozo_exception if feed.bozo else '기사 0개'}")
+        try:
+            resp = requests.get(feed_url, timeout=15)
+            resp.raise_for_status()
+            cleaned = _INVALID_XML_CHARS.sub("", resp.text)
+            retried = feedparser.parse(cleaned)
+            if retried.entries:
+                feed = retried
+                print(f"  → 정제 후 재파싱 성공, 기사 {len(feed.entries)}개 확보")
+            else:
+                print("  → 정제 후에도 기사를 못 가져왔습니다. RSS URL을 확인해주세요.")
+        except Exception as e:
+            print(f"  → 재시도 중 오류: {e}")
 
     articles = []
     for entry in feed.entries[:limit]:

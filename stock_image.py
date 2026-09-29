@@ -55,8 +55,7 @@ def _search_unsplash(image_query: str, unsplash_access_key: str) -> "dict | None
             return None
         photo = results[0]
         photographer = photo["user"]["name"]
-        photographer_link = photo["user"]["links"]["html"] + "?utm_source=your_app&utm_medium=referral"
-        attribution = f"사진: {photographer} (Unsplash) {photographer_link}"
+        attribution = f"사진: {photographer} (Unsplash)"
         return {"url": photo["urls"]["regular"], "attribution": attribution}
     except Exception as e:
         print(f"[경고] Unsplash 검색 실패: {e}")

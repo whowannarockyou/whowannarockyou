@@ -62,9 +62,14 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
 - is_person_focused: 이 기사가 **특정 실존 인물(정치인·연예인·기업인 등 공인) 개인이 중심**인 기사인지
   true/false로 판단. 정책/사건/지역 이슈처럼 특정 인물의 얼굴이 핵심이 아닌 기사는 false.
   (예: "○○ 의원, 막말 논란" → true / "정부 예산안 발표" → false)
+- outlook: "앞으로의 전망" 2~3문장 (존댓말). 반드시 기사에 실제로 언급된 다음 절차/일정/조건
+  (예: "국회 심의를 거쳐야 한다", "다음 달 결과가 발표될 예정이다" 등)에 근거해서만 작성할 것.
+  기사에 없는 내용을 추측해서 단정적으로 말하지 말고, "~할 전망입니다", "~할 것으로 보입니다",
+  "~여부가 주목됩니다" 처럼 조심스러운 표현을 쓸 것. 기사에 향후 일정/절차 언급이 전혀 없으면
+  빈 문자열("")로 둘 것 (억지로 지어내지 말 것).
 - 반드시 아래 JSON 형식으로만 답해. 다른 설명 붙이지 마.
 
-{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "tag": "...", "is_person_focused": false}}
+{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "tag": "...", "is_person_focused": false, "outlook": "..."}}
 """
 
     response = client.messages.create(
@@ -88,12 +93,39 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
             "image_query": "news paper background",
             "tag": "주목",
             "is_person_focused": False,
+            "outlook": "",
         }
 
 
-def build_caption(article_title: str, article_link: str, source_name: str) -> str:
-    """게시물 본문(캡션)을 만듭니다. 기사 제목 + 최소한의 출처/링크 표기만 남긴 간결한 버전."""
-    return f"{article_title}\n\n출처: {source_name} | {article_link}"
+def build_caption(
+    article_title: str,
+    article_link: str,
+    source_name: str,
+    bullets: "list[str] | None" = None,
+    detail_points: "list[str] | None" = None,
+    outlook: str = "",
+) -> str:
+    """게시물 본문(캡션)을 만듭니다. 기사 제목 + 핵심 요약 + 상세 설명 + 앞으로의 전망 + 출처/링크."""
+    lines = [article_title, ""]
+
+    for b in (bullets or []):
+        if b:
+            lines.append(f"· {b}")
+    if bullets:
+        lines.append("")
+
+    for p in (detail_points or []):
+        if p:
+            lines.append(p)
+    if detail_points:
+        lines.append("")
+
+    if outlook:
+        lines.append(f"🔮 앞으로는? {outlook}")
+        lines.append("")
+
+    lines.append(f"📷 {source_name} | {article_link}")
+    return "\n".join(lines)
 
 
 def pick_hottest_article(candidates: list) -> int:

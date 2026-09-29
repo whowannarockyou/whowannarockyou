@@ -86,7 +86,12 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
     closing_url = upload_image(closing_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
 
     print("[게시] Instagram에 캐러셀 게시 중...")
-    caption = build_caption(title, link, SOURCE_NAME)
+    caption = build_caption(
+        title, link, SOURCE_NAME,
+        bullets=content.get("bullets"),
+        detail_points=content.get("detail_points"),
+        outlook=content.get("outlook", ""),
+    )
     if photo_attribution:
         caption += f"\n{photo_attribution}"
     media_id = post_carousel(
