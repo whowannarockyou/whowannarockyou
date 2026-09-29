@@ -39,3 +39,8 @@ CTA_TAGLINE = "다음 소식이 궁금하다면?."
 # 만든 봇에게 메시지 하나 보낸 뒤 https://api.telegram.org/bot<TOKEN>/getUpdates 접속 → chat id 확인
 TELEGRAM_BOT_TOKEN = "8626252144:AAEMTh6R2bGLknw2mWbY09aptpTDYitqEGQ"
 TELEGRAM_CHAT_ID = "8466240463"
+
+# 9) 인물기사 사진 답장 타임아웃 (분 단위)
+# 이 시간 안에 사진 답장이 없으면 그 기사는 포기하고, 다른 새 기사 처리를 재개합니다.
+# (사진을 너무 늦게 보내면 그 동안 다른 뉴스도 아예 처리가 안 멈춰버리는 걸 방지)
+PENDING_PHOTO_TIMEOUT_MINUTES = 7  # 예: 360분 = 6시간, 30분으로 하려면 30

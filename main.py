@@ -4,7 +4,8 @@
 흐름:
 1. 대기 중인 "인물 기사"가 있으면 → 텔레그램에 사진 답장이 왔는지 확인
    - 왔으면: 그 사진으로 카드뉴스 완성 → 게시 → 대기 해제
-   - 안 왔으면: 이번 실행은 여기서 종료 (새 기사 안 가져옴)
+   - 타임아웃(설정한 시간) 지났으면: 그 기사는 포기하고 → 아래 2번부터 이어서 진행
+   - 아직 시간 안 지났고 사진도 없으면: 이번 실행은 여기서 종료 (새 기사 안 가져옴)
 2. 대기 중인 게 없으면 → RSS에서 최신 기사 수집 → 화제성 있는 기사 선택
 3. Claude로 카드뉴스 콘텐츠 생성 (인물 중심 기사인지도 함께 판단)
 4. 인물 중심 기사면 → 텔레그램으로 알림 보내고 대기 상태로 저장 후 종료
@@ -34,6 +35,7 @@ from config import (
     CTA_TAGLINE,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
+    PENDING_PHOTO_TIMEOUT_MINUTES,
 )
 from fetch_news import fetch_latest_articles
 from summarize import summarize_for_card, build_caption, pick_hottest_article
@@ -42,7 +44,7 @@ from post_instagram import upload_image, post_carousel
 from history import load_history, save_to_history
 from stock_image import search_related_photo
 from telegram_notify import send_message, check_for_photo_reply
-from pending import save_pending, load_pending, clear_pending
+from pending import save_pending, load_pending, clear_pending, is_expired
 
 
 def _build_and_post(title, link, content, image_url=None, local_image_path=None, photo_attribution=None):
@@ -108,24 +110,38 @@ def run():
     # ── 1) 대기 중인 인물 기사가 있는지 먼저 확인 ──────────────────
     pending = load_pending()
     if pending:
-        print("[대기 확인] 인물 기사가 사진 답장을 기다리고 있습니다. 텔레그램 확인 중...")
-        photo_path = check_for_photo_reply(
-            TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, save_path="output/telegram_photo.jpg"
-        )
-        if not photo_path:
-            print("아직 사진 답장이 없습니다. 다음 실행 때 다시 확인합니다.")
-            return
+        if is_expired(pending, PENDING_PHOTO_TIMEOUT_MINUTES):
+            print(
+                f"[타임아웃] {PENDING_PHOTO_TIMEOUT_MINUTES}분 안에 사진 답장이 오지 않아 "
+                f"이 기사는 포기합니다: {pending['title']}"
+            )
+            save_to_history(pending["link"])  # 같은 기사를 다시 후보로 뽑지 않도록 이력에 남김
+            clear_pending()
+            send_message(
+                TELEGRAM_BOT_TOKEN,
+                TELEGRAM_CHAT_ID,
+                f"⏰ 시간 초과로 이 기사는 건너뛰었어요: {pending['title']}",
+            )
+            # 대기를 해제했으니 아래로 이어서 평소처럼 새 기사 처리를 진행합니다.
+        else:
+            print("[대기 확인] 인물 기사가 사진 답장을 기다리고 있습니다. 텔레그램 확인 중...")
+            photo_path = check_for_photo_reply(
+                TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, save_path="output/telegram_photo.jpg"
+            )
+            if not photo_path:
+                print("아직 사진 답장이 없습니다. 다음 실행 때 다시 확인합니다.")
+                return
 
-        print("사진 도착! 이 사진으로 카드뉴스를 완성해 게시합니다.")
-        _build_and_post(
-            title=pending["title"],
-            link=pending["link"],
-            content=pending["content"],
-            local_image_path=photo_path,
-        )
-        clear_pending()
-        print("완료.")
-        return
+            print("사진 도착! 이 사진으로 카드뉴스를 완성해 게시합니다.")
+            _build_and_post(
+                title=pending["title"],
+                link=pending["link"],
+                content=pending["content"],
+                local_image_path=photo_path,
+            )
+            clear_pending()
+            print("완료.")
+            return
 
     # ── 2) 대기 중인 게 없으면 평소처럼 새 기사 수집 ──────────────
     print("[1/4] 최신 기사 수집 중...")
