@@ -99,14 +99,25 @@ def generate_cover_card(
     output_path: str,
     instagram_handle: str = "",
     tags: "list[str] | None" = None,
+    local_image_path: "str | None" = None,
 ) -> str:
     """
     1번 슬라이드: 사진(있으면 전체 배경) + 아웃라인 태그 + 헤드라인 + 서브바.
     하단 중앙엔 본인 인스타그램 핸들(@instagram_handle)을 표시하고,
     출처는 우측 하단에 아주 작은 글씨로 최소화해서 표기합니다.
+
+    local_image_path가 주어지면 image_url 대신 그 로컬 파일을 사진으로 사용합니다
+    (텔레그램으로 직접 받은 사진 등, 이미 다운로드된 파일을 쓸 때 사용).
     """
     W, H = CARD_SIZE
-    photo = _download_image(image_url)
+    if local_image_path:
+        try:
+            photo = Image.open(local_image_path).convert("RGB")
+        except Exception as e:
+            print(f"[경고] 로컬 사진 열기 실패, 사진 없이 진행합니다: {e}")
+            photo = None
+    else:
+        photo = _download_image(image_url)
 
     if photo is not None:
         img = _center_crop_resize(photo, W, H)
