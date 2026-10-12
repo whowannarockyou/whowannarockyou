@@ -437,11 +437,90 @@ def generate_detail_card(
 
     # 페이지 점 (2/3)
     cx, cy = W // 2, H - 70
-    for k in range(3):
+    for k in range(4):
         on = k == 1
         r = 7
-        x = cx + (k - 1) * 26
+        x = cx + (k - 1.5) * 26
         draw.ellipse([x - r, cy - r, x + r, cy + r], fill=OLIVE if on else (205, 195, 172))
+
+    img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
+    return output_path
+
+
+def generate_direction_card(
+    direction_title: str,
+    direction_points: list[str],
+    output_path: str,
+    tag_text: str = "앞으로의 방향",
+) -> str:
+    """3번 슬라이드: 앞으로 취해야 할 방향성/지켜볼 포인트 (버건디 배경 + 아이보리 글자)."""
+    W, H = CARD_SIZE
+    img = _dark_gradient_bg()
+    draw = ImageDraw.Draw(img)
+    points = [p for p in direction_points if p][:3] or [""]
+    n = len(points)
+    inner_w = W - MARGIN * 2
+
+    # 태그: 아이보리 pill
+    font_tag = _font(FONT_BOLD, 26)
+    tb = draw.textbbox((0, 0), tag_text, font=font_tag)
+    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    draw.rounded_rectangle([MARGIN, 120, MARGIN + tw + 44, 120 + th + 26], radius=30, fill=IVORY)
+    draw.text((MARGIN + 22, 120 + 11 - tb[1]), tag_text, font=font_tag, fill=BURGUNDY)
+
+    # 제목 (최대 2줄)
+    tsize = 66
+    while True:
+        font_title = MixedFont(_font(FONT_KO_TITLE, tsize - 2), _font(FONT_SERIF, tsize), tracking=-1.5)
+        tlines = _wrap_px(draw, direction_title, font_title, inner_w)
+        if len(tlines) <= 2 or tsize <= 48:
+            break
+        tsize -= 4
+    ty = 200
+    for line in tlines[:2]:
+        _text(draw, (MARGIN, ty), line, font_title, TEXT_MAIN)
+        ty += int(tsize * 1.28)
+    draw.rounded_rectangle([MARGIN, ty + 16, MARGIN + 90, ty + 24], radius=4, fill=OLIVE_LIGHT)
+
+    # 포인트: 카드 없이 큰 번호 + 본문 + 얇은 구분선, 남은 높이에 균등 분배
+    top = ty + 70
+    bottom = H - 130
+    row_h = min((bottom - top) // n, 220)
+    top += max(0, ((bottom - top) - row_h * n) // 2)
+    font_num = _font(FONT_SERIF, 64)
+    for i, point in enumerate(points):
+        y0 = top + i * row_h
+        if i > 0:
+            draw.line([(MARGIN, y0), (W - MARGIN, y0)], fill=(130, 70, 82), width=1)
+        label = f"{i + 1:02d}"
+        nb = draw.textbbox((0, 0), label, font=font_num)
+        draw.text((MARGIN, y0 + (row_h - (nb[3] - nb[1])) / 2 - nb[1]), label, font=font_num, fill=OLIVE_LIGHT)
+        text_x = MARGIN + 120
+        text_w = W - MARGIN - text_x
+        bsize = 36
+        while True:
+            font_body = _font(FONT_REGULAR, bsize)
+            blines = _wrap_px(draw, point, font_body, text_w)
+            lh = int(bsize * 1.42)
+            if len(blines) * lh <= row_h - 36 or bsize <= 26:
+                break
+            bsize -= 2
+        by = y0 + (row_h - len(blines) * lh) / 2 - (lh - bsize) / 2 + 2
+        for line in blines:
+            words = line.split(" ")
+            x = text_x
+            for idx, w in enumerate(words):
+                token = w + (" " if idx < len(words) - 1 else "")
+                fill = OLIVE_LIGHT if any(c.isdigit() for c in w) else TEXT_MAIN
+                draw.text((x, by), token, font=font_body, fill=fill)
+                x += draw.textlength(token, font=font_body)
+            by += lh
+
+    # 페이지 점 (3/4)
+    cx, cy = W // 2, H - 70
+    for k in range(4):
+        x = cx + (k - 1.5) * 26
+        draw.ellipse([x - 7, cy - 7, x + 7, cy + 7], fill=IVORY if k == 2 else (140, 80, 92))
 
     img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
     return output_path
