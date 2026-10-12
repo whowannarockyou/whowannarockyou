@@ -50,11 +50,12 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
 - bullets: 핵심만 담은 3개의 아주 짧은 문장 (각 20자 이내)
 - detail_title: 2번째 슬라이드용 소제목, "무엇이 달라지나요?" 같은 궁금증 유발형 (12자 내외)
 - detail_points: 배경/맥락/영향 등을 조금 더 자세히 풀어쓴 4개 문장 (각 40자 이내, 존댓말)
-- image_query: 커버 사진을 검색할 때 쓸 영어 키워드 2~4단어. 기사의 구체적인 고유명사(인명·지명·연도)나
-  사건명이 아니라, 그 기사가 풍기는 "장면/분위기"를 묘사하는 일반적인 영어 단어로 작성할 것
-  (예: 전쟁 관련 기사 → "war destruction city", 예산 기사 → "government budget meeting",
-  귀성길 기사 → "train station travel crowd"). 스톡사진 검색엔진에 넣을 검색어이므로
-  실존 인물/사건 이름이 아니라 시각적으로 존재할 법한 장면 위주로 작성.
+- image_query: 커버 사진을 검색할 때 쓸 영어 키워드 2~4단어. 기사 주제를 **직관적으로 떠올리게 하는 구체적인 사물/장면**을
+  묘사할 것 (예: 노벨경제학상 → "nobel prize medal", 금리 → "bank interest rate calculator",
+  귀성길 → "train station travel crowd", 반도체 → "semiconductor chip closeup", 전쟁 → "war destruction city").
+  사람 이름·고유명사는 쓰지 말고, "podium", "stage", "empty room", "minimal", "background", "abstract",
+  "architecture" 처럼 주제와 상관없이 아무 기사에나 어울리는 모호한 단어는 쓰지 말 것.
+- image_queries_alt: 위와 다른 각도의 대체 영어 검색어 2개 (각 2~4단어, 같은 원칙). 첫 검색어로 좋은 사진이 없을 때 사용.
 - tag: 커버 이미지 상단 태그에 넣을 한 단어. 아래 목록 중 기사 톤에 가장 잘 맞는 것 하나를 고를 것
   (반드시 이 목록 안에서만 선택): "논란", "단독", "충격", "속보", "화제", "이거 실화", "주목"
   - 의혹/비판/논쟁성 기사 → "논란"
@@ -83,14 +84,19 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
   기사에 없는 사실이나 수치를 지어내지 말 것. 단정 대신 "~할 필요가 있습니다", "~이 관건입니다",
   "~여부를 지켜봐야 합니다" 같은 표현을 쓸 것. 개인(실존 인물)을 비난·비하하는 표현 금지.
   근거가 전혀 없으면 빈 리스트([])로 둘 것.
+- 연예/문화 기사 주의사항: 연예인·방송·콘텐츠 기사는 반드시 기사에 확인된 사실만 쓸 것.
+  열애·결혼·이혼·사생활·루머·의혹·소송·사건사고 관련 내용은 추측이나 단정 없이 기사에 나온 표현 수준으로만 전하고,
+  유머/조롱 톤은 쓰지 말 것. 사망·질병 소식은 애도하는 차분한 톤으로 쓸 것.
+  작품·공연·앨범·방송 소식처럼 밝은 소재는 유머형 후킹도 가능. direction_points는 작품/활동의 향후 일정처럼
+  기사에 근거가 있을 때만 쓰고, 사건·사생활 기사에서는 빈 리스트([])로 둘 것.
 - 반드시 아래 JSON 형식으로만 답해. 다른 설명 붙이지 마.
 
-{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
+{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "image_queries_alt": ["...", "..."], "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
 """
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1000,
+        max_tokens=1400,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -107,6 +113,7 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
             "detail_title": "자세히 보기",
             "detail_points": [clean_summary[:40], "", "", ""],
             "image_query": "news paper background",
+            "image_queries_alt": [],
             "tag": "주목",
             "is_person_focused": False,
             "outlook": "",

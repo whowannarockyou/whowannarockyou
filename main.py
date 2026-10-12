@@ -21,6 +21,7 @@
 import os
 import sys
 
+import config
 from config import (
     RSS_FEED_URL,
     SOURCE_NAME,
@@ -39,7 +40,7 @@ from config import (
 )
 from fetch_news import fetch_latest_articles
 from summarize import summarize_for_card, build_caption, pick_hottest_article
-from generate_card import generate_cover_card, generate_detail_card, generate_closing_card
+from generate_card import generate_cover_card, generate_detail_card, generate_direction_card, generate_closing_card
 from post_instagram import upload_image, post_carousel
 from history import load_history, save_to_history
 from stock_image import search_related_photo
@@ -73,6 +74,16 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
         output_path=detail_path,
     )
 
+    direction_path = None
+    if content.get("direction_points"):
+        print("[카드 생성] 앞으로의 방향 카드 생성 중...")
+        direction_path = f"output/direction_{slug}.jpg"
+        generate_direction_card(
+            direction_title=content.get("direction_title") or "이제 무엇을 지켜봐야 할까요?",
+            direction_points=content["direction_points"],
+            output_path=direction_path,
+        )
+
     print("[카드 생성] 클로징 카드(CTA) 생성 중...")
     closing_path = f"output/closing_{slug}.jpg"
     generate_closing_card(
@@ -82,10 +93,14 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
         instagram_handle=INSTAGRAM_HANDLE,
     )
 
-    print("[업로드] 이미지 3장 업로드 중...")
+    print("[업로드] 이미지 업로드 중...")
     cover_url = upload_image(cover_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
     detail_url = upload_image(detail_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
     closing_url = upload_image(closing_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
+    direction_url = (
+        upload_image(direction_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
+        if direction_path else None
+    )
 
     print("[게시] Instagram에 캐러셀 게시 중...")
     caption = build_caption(
@@ -97,7 +112,7 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
     if photo_attribution:
         caption += f"\n{photo_attribution}"
     media_id = post_carousel(
-        image_urls=[cover_url, detail_url, closing_url],
+        image_urls=[u for u in (cover_url, detail_url, direction_url, closing_url) if u],
         caption=caption,
         ig_user_id=IG_USER_ID,
         access_token=IG_ACCESS_TOKEN,
@@ -145,7 +160,17 @@ def run():
 
     # ── 2) 대기 중인 게 없으면 평소처럼 새 기사 수집 ──────────────
     print("[1/4] 최신 기사 수집 중...")
-    articles = fetch_latest_articles(RSS_FEED_URL, limit=10)
+    # config.py에 RSS_FEED_URLS(리스트)가 있으면 여러 피드를 합쳐서 후보로 사용 (예: 종합 + 연예)
+    feed_urls = getattr(config, "RSS_FEED_URLS", None) or [RSS_FEED_URL]
+    articles, seen_links = [], set()
+    for url in feed_urls:
+        try:
+            for a in fetch_latest_articles(url, limit=10):
+                if a.link and a.link not in seen_links:
+                    seen_links.add(a.link)
+                    articles.append(a)
+        except Exception as e:
+            print(f"[경고] 피드 수집 실패, 건너뜁니다 ({url}): {e}")
     if not articles:
         print("가져올 기사가 없습니다. RSS URL을 확인하세요.")
         return
@@ -188,7 +213,14 @@ def run():
 
     # ── 4) 인물 중심이 아니면 기존처럼 완전 자동 진행 ────────────
     print("[4/4] Pexels/Unsplash에서 관련 이미지를 검색합니다...")
-    photo_result = search_related_photo(content.get("image_query", ""), PEXELS_API_KEY, UNSPLASH_ACCESS_KEY)
+    photo_result = search_related_photo(
+        content.get("image_query", ""),
+        PEXELS_API_KEY,
+        UNSPLASH_ACCESS_KEY,
+        headline=content.get("headline", ""),
+        alt_queries=content.get("image_queries_alt", []),
+        article_hint=target.title,
+    )
     image_url = photo_result["url"] if photo_result else None
     photo_attribution = photo_result["attribution"] if photo_result else None
     if not image_url:
