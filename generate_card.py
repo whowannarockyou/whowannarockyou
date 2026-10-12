@@ -13,29 +13,108 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 CARD_SIZE = (1080, 1080)
-BG_TOP = (20, 21, 26)
-BG_BOTTOM = (6, 6, 9)
-ACCENT = (124, 58, 237)       # 포인트 컬러 (보라). 브랜드에 맞게 바꿔도 됨
-TEXT_MAIN = (255, 255, 255)
-TEXT_SUB = (230, 230, 232)
-TEXT_MUTED = (150, 150, 156)
-TEXT_FAINT = (110, 110, 118)  # 출처 등 최소화된 표기용 (아주 옅은 회색)
+# 팔레트: 아이보리 + 버건디 메인, 올리브는 포인트로 소량
+IVORY = (245, 239, 226)
+IVORY_CARD = (252, 248, 238)
+BURGUNDY = (110, 27, 43)
+BURGUNDY_DEEP = (62, 14, 26)
+OLIVE = (107, 114, 60)
+OLIVE_LIGHT = (160, 168, 105)
+INK = (44, 26, 30)
+
+BG_TOP = (92, 21, 38)          # 버건디 그라데이션 (사진 없는 커버/클로징)
+BG_BOTTOM = (46, 9, 20)
+ACCENT = BURGUNDY
+TEXT_MAIN = IVORY
+TEXT_SUB = (236, 226, 208)
+TEXT_MUTED = (205, 190, 170)
+TEXT_FAINT = (190, 172, 150)
 
 MARGIN = 150  # 좌우 안전 여백 (인스타 그리드 크롭 대비, 전체 폭의 약 14%)
 
 # 폰트 경로: fonts/ 폴더에 나눔고딕 계열을 넣어서 사용합니다.
 FONT_BOLD = "fonts/NanumGothicExtraBold.ttf"   # 없으면 NanumGothicBold.ttf로 대체
 FONT_REGULAR = "fonts/NanumGothic.ttf"
+# 제목/숫자/브랜드용 명조(세리프) - 고급스러운 인상. 없으면 고딕 볼드로 자동 대체
+FONT_SERIF = "fonts/NanumMyeongjoBold.ttf"
+# 한글 제목용 모던 고딕. Pretendard SemiBold 권장(없으면 나눔고딕 볼드로 자동 대체)
+FONT_KO_TITLE = "fonts/Pretendard-SemiBold.otf"
 
 
 def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
     try:
-        return ImageFont.truetype(path, size)
+        f = ImageFont.truetype(path, size)
+        if "Variable" in path:
+            try:
+                f.set_variation_by_axes([700])
+            except Exception:
+                pass
+        return f
     except OSError:
+        if "Pretendard" in path:
+            for alt in ("fonts/Pretendard-Bold.otf", "fonts/NanumGothicBold.ttf", "fonts/NanumGothicExtraBold.ttf"):
+                try:
+                    return ImageFont.truetype(alt, size)
+                except OSError:
+                    pass
+        if "Myeongjo" in path:
+            for alt in ("fonts/NanumMyeongjoExtraBold.ttf", "fonts/NanumMyeongjo.ttf"):
+                try:
+                    return ImageFont.truetype(alt, size)
+                except OSError:
+                    pass
         try:
             return ImageFont.truetype("fonts/NanumGothicBold.ttf", size)
         except OSError:
             return ImageFont.load_default()
+
+
+class MixedFont:
+    """한글은 모던 고딕, 영문/숫자/기호는 세리프로 그리는 혼합 폰트."""
+
+    def __init__(self, ko, en, tracking=0):
+        self.ko, self.en, self.tracking = ko, en, tracking  # tracking: 글자 간격(px, 음수=좁게)
+
+
+def _is_ko(ch: str) -> bool:
+    return "\uac00" <= ch <= "\ud7a3" or "\u3130" <= ch <= "\u318f"
+
+
+def _runs(text):
+    runs, cur, cur_ko = [], "", None
+    for ch in text:
+        ko = _is_ko(ch)
+        if ch == " " and cur_ko is not None:
+            ko = cur_ko
+        if cur_ko is None or ko == cur_ko:
+            cur += ch
+        else:
+            runs.append((cur, cur_ko))
+            cur = ch
+        cur_ko = ko
+    if cur:
+        runs.append((cur, cur_ko))
+    return runs
+
+
+def _tlen(draw, text, font):
+    if not isinstance(font, MixedFont):
+        return draw.textlength(text, font=font)
+    return sum(draw.textlength(t, font=font.ko if ko else font.en) for t, ko in _runs(text)) + font.tracking * len(text)
+
+
+def _text(draw, xy, text, font, fill):
+    """xy는 한글 폰트 기준 좌상단. 혼합 폰트는 공통 베이스라인에 맞춰 그립니다."""
+    if not isinstance(font, MixedFont):
+        draw.text(xy, text, font=font, fill=fill)
+        return
+    x, y = xy
+    base = y + font.ko.getmetrics()[0]
+    for t, ko in _runs(text):
+        f = font.ko if ko else font.en
+        for ch in t:
+            draw.text((x, base), ch, font=f, fill=fill, anchor="ls")
+            x += draw.textlength(ch, font=f) + font.tracking
 
 
 def _dark_gradient_bg() -> Image.Image:
@@ -121,60 +200,61 @@ def generate_cover_card(
 
     if photo is not None:
         img = _center_crop_resize(photo, W, H)
-        # 하단부에 다크 그라데이션 오버레이 (사진 전체 위에, 텍스트 가독성 확보)
-        overlay_h = 620
-        overlay = Image.new("L", (W, overlay_h), 0)
+        # 하단에만 부드러운 중립 다크 그라데이션 (사진 상단은 원색 그대로)
+        g_top = H - 700
+        g_h = H - g_top
+        overlay = Image.new("L", (W, g_h), 0)
         odraw = ImageDraw.Draw(overlay)
-        for y in range(overlay_h):
-            odraw.line([(0, y), (W, y)], fill=int(235 * (y / overlay_h)))
-        dark_layer = Image.new("RGB", (W, overlay_h), (5, 5, 8))
-        img.paste(dark_layer, (0, H - overlay_h), overlay)
+        for y in range(g_h):
+            t = y / g_h
+            a = t * t * (3 - 2 * t)          # smoothstep
+            odraw.line([(0, y), (W, y)], fill=int(238 * a))
+        img.paste(Image.new("RGB", (W, g_h), (12, 9, 10)), (0, g_top), overlay)
     else:
         img = _dark_gradient_bg()
 
     draw = ImageDraw.Draw(img)
 
-    font_tag = _font(FONT_BOLD, 26)
-    font_headline = _font(FONT_BOLD, 60)
-    font_sub = _font(FONT_REGULAR, 27)
-    font_handle = _font(FONT_REGULAR, 24)
+    font_tag = _font(FONT_BOLD, 25)
+    font_headline = MixedFont(_font(FONT_KO_TITLE, 66), _font(FONT_SERIF, 70), tracking=-1.5)
+    font_sub = _font(FONT_REGULAR, 29)
+    font_handle = _font(FONT_REGULAR, 22)
     font_source = _font(FONT_REGULAR, 18)
 
-    # 콘텐츠 시작 y좌표: 사진 있으면 하단 정렬, 없으면 중앙보다 살짝 아래
-    content_start_y = (H - 480) if photo is not None else 460
+    wrapped_headline = textwrap.wrap(headline, width=10)[:2]
+    line_h = 84
+    bottom_y = H - 92                      # 핸들/출처 줄
+    rule_y = bottom_y - 26                 # 얇은 구분선
+    sub_y = rule_y - 70                    # 요약 한 줄
+    y_head = sub_y - 36 - len(wrapped_headline) * line_h
+    y_tag = y_head - 78
 
-    # 아웃라인 태그들
-    y_tag = content_start_y
+    # 태그: 버건디 채움 pill (아이보리 글자)
     x_cursor = MARGIN
     for tag in (tags or ["오늘의 뉴스"]):
-        x_cursor = _outline_pill(draw, tag, (x_cursor, y_tag), font_tag) + 16
+        tb = draw.textbbox((0, 0), tag, font=font_tag)
+        tw, th = tb[2] - tb[0], tb[3] - tb[1]
+        draw.rounded_rectangle([x_cursor, y_tag, x_cursor + tw + 40, y_tag + th + 24], radius=28, fill=BURGUNDY)
+        draw.text((x_cursor + 20, y_tag + 10 - tb[1]), tag, font=font_tag, fill=IVORY)
+        x_cursor += tw + 40 + 12
 
-    # 헤드라인 (최대 2줄)
-    y = y_tag + 80
-    wrapped_headline = textwrap.wrap(headline, width=10)[:2]
+    # 헤드라인
+    y = y_head
     for line in wrapped_headline:
-        draw.text((MARGIN, y), line, font=font_headline, fill=TEXT_MAIN)
-        y += 76
+        _text(draw, (MARGIN, y), line, font_headline, TEXT_MAIN)
+        y += line_h
 
-    # 서브 바 (다크 바 + 구분선 + 핵심 불릿 첫 줄)
-    bar_y = y + 36
-    bar_h = 60
-    draw.rectangle([0, bar_y, W, bar_y + bar_h], fill=(8, 8, 10))
-    draw.line([(MARGIN, bar_y + 14), (MARGIN, bar_y + bar_h - 14)], fill=ACCENT, width=3)
-    sub_text = bullets[0] if bullets else ""
-    draw.text((MARGIN + 22, bar_y + 15), sub_text, font=font_sub, fill=TEXT_SUB)
+    # 요약 한 줄 + 올리브 세로선
+    draw.rectangle([MARGIN, sub_y + 3, MARGIN + 5, sub_y + 38], fill=OLIVE_LIGHT)
+    draw.text((MARGIN + 22, sub_y), bullets[0] if bullets else "", font=font_sub, fill=(232, 224, 208))
 
-    # 하단: 중앙엔 본인 인스타 핸들, 우측 아래엔 아주 작은 출처 표기 (최소화)
+    # 얇은 구분선 + 핸들 / 출처 (최소 표기)
+    draw.line([(MARGIN, rule_y), (W - MARGIN, rule_y)], fill=(120, 108, 100), width=1)
     if instagram_handle:
-        handle_text = f"@{instagram_handle}"
-        hbbox = draw.textbbox((0, 0), handle_text, font=font_handle)
-        hw = hbbox[2] - hbbox[0]
-        draw.text(((W - hw) / 2, H - 66), handle_text, font=font_handle, fill=TEXT_MUTED)
-
+        draw.text((MARGIN, bottom_y), f"@{instagram_handle}", font=font_handle, fill=(205, 195, 175))
     source_text = f"ⓒ{source_name}"
-    sbbox = draw.textbbox((0, 0), source_text, font=font_source)
-    sw = sbbox[2] - sbbox[0]
-    draw.text((W - MARGIN - sw + 60, H - 34), source_text, font=font_source, fill=TEXT_FAINT)
+    sw = draw.textlength(source_text, font=font_source)
+    draw.text((W - MARGIN - sw, bottom_y + 4), source_text, font=font_source, fill=(150, 140, 128))
 
     img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
     return output_path
@@ -197,19 +277,18 @@ def generate_closing_card(
 
     # 상하단 레터박스 바 (시네마틱한 느낌의 프레이밍)
     bar_h = 46
-    draw.rectangle([0, 0, W, bar_h], fill=(0, 0, 0))
-    draw.rectangle([0, H - bar_h, W, H], fill=(0, 0, 0))
+    draw.rectangle([0, 0, W, bar_h], fill=OLIVE)
+    draw.rectangle([0, H - bar_h, W, H], fill=OLIVE)
 
-    font_logo = _font(FONT_BOLD, 96)
+    font_logo = MixedFont(_font(FONT_KO_TITLE, 92), _font(FONT_SERIF, 100), tracking=-1)
     font_btn = _font(FONT_BOLD, 32)
     font_tagline = _font(FONT_REGULAR, 34)
     font_handle = _font(FONT_REGULAR, 22)
 
     # 중앙 브랜드 워드마크
-    lb = draw.textbbox((0, 0), brand_name, font=font_logo)
-    lw, lh = lb[2] - lb[0], lb[3] - lb[1]
+    lw, lh = _tlen(draw, brand_name, font_logo), 100
     logo_y = H * 0.42
-    draw.text(((W - lw) / 2, logo_y), brand_name, font=font_logo, fill=TEXT_MAIN)
+    _text(draw, ((W - lw) / 2, logo_y), brand_name, font_logo, TEXT_MAIN)
 
     # 팔로우 버튼 (아웃라인 pill)
     bb = draw.textbbox((0, 0), button_text, font=font_btn)
@@ -218,8 +297,8 @@ def generate_closing_card(
     btn_w, btn_h = bw + pad_x * 2, bh + pad_y * 2
     btn_x = (W - btn_w) / 2
     btn_y = logo_y + lh + 64
-    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=btn_h // 2, outline=TEXT_MAIN, width=3)
-    draw.text((btn_x + pad_x, btn_y + pad_y - 3), button_text, font=font_btn, fill=TEXT_MAIN)
+    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=btn_h // 2, fill=IVORY)
+    draw.text((btn_x + pad_x, btn_y + pad_y - 3), button_text, font=font_btn, fill=BURGUNDY)
 
     # 태그라인 (중앙 정렬, 최대 2줄)
     y = btn_y + btn_h + 46
@@ -240,41 +319,129 @@ def generate_closing_card(
     return output_path
 
 
+HIGHLIGHT = (150, 28, 52)     # 숫자/핵심 수치 강조색 (진한 버건디)
+CARD_BG = IVORY_CARD
+
+
+def _wrap_px(draw, text, font, max_w):
+    """픽셀 폭 기준 줄바꿈 (공백 단위, 너무 긴 단어는 글자 단위)."""
+    lines, cur = [], ""
+    for word in text.split(" "):
+        trial = (cur + " " + word).strip()
+        if _tlen(draw, trial, font) <= max_w:
+            cur = trial
+            continue
+        if cur:
+            lines.append(cur)
+        cur = ""
+        for ch in word:
+            if _tlen(draw, cur + ch, font) > max_w:
+                lines.append(cur)
+                cur = ch
+            else:
+                cur += ch
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _draw_highlighted(draw, xy, line, font, base_fill):
+    """숫자가 들어간 단어는 강조색으로 그립니다."""
+    x, y = xy
+    words = line.split(" ")
+    for idx, w in enumerate(words):
+        token = w + (" " if idx < len(words) - 1 else "")
+        fill = HIGHLIGHT if any(c.isdigit() for c in w) else base_fill
+        draw.text((x, y), token, font=font, fill=fill)
+        x += draw.textlength(token, font=font)
+
+
 def generate_detail_card(
     detail_title: str,
     detail_points: list[str],
     output_path: str,
     tag_text: str = "자세히 보기",
 ) -> str:
-    """2번 슬라이드: 소제목 + 번호 매긴 상세 설명 4개 (다크 배경, 사진 없음)."""
+    """2번 슬라이드: 큰 후킹 제목 + 번호 카드 4개를 카드 전체 높이에 균등 배치."""
     W, H = CARD_SIZE
-    img = _dark_gradient_bg()
+    img = Image.new("RGB", CARD_SIZE, IVORY)
     draw = ImageDraw.Draw(img)
+    points = [p for p in detail_points if p][:4] or [""]
+    n = len(points)
 
-    font_title = _font(FONT_BOLD, 50)
-    font_body = _font(FONT_REGULAR, 32)
-    font_num = _font(FONT_BOLD, 30)
+    # 상단 버건디 블록 + 올리브 포인트
+    draw.rectangle([0, 0, W, 78], fill=BURGUNDY)
+    draw.rectangle([0, 78, W, 84], fill=OLIVE)
+
+    # 태그: 채워진 보라 pill
     font_tag = _font(FONT_BOLD, 26)
+    tb = draw.textbbox((0, 0), tag_text, font=font_tag)
+    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    draw.rounded_rectangle([MARGIN, 132, MARGIN + tw + 44, 132 + th + 26], radius=30, fill=BURGUNDY)
+    draw.text((MARGIN + 22, 132 + 11 - tb[1]), tag_text, font=font_tag, fill=IVORY)
 
-    _outline_pill(draw, tag_text, (MARGIN, 90), font_tag)
+    # 제목 (크게, 최대 2줄, 마지막 줄 강조색)
+    inner_w = W - MARGIN * 2
+    tsize = 66
+    while True:
+        font_title = MixedFont(_font(FONT_KO_TITLE, tsize - 2), _font(FONT_SERIF, tsize), tracking=-1.5)
+        tlines = _wrap_px(draw, detail_title, font_title, inner_w)
+        if len(tlines) <= 2 or tsize <= 48:
+            break
+        tsize -= 4
+    tlines = tlines[:2]
+    ty = 210
+    for li, line in enumerate(tlines):
+        fill = BURGUNDY if (li == len(tlines) - 1 and len(tlines) > 1) else INK
+        _text(draw, (MARGIN, ty), line, font_title, fill)
+        ty += int(tsize * 1.28)
+    # 제목 아래 포인트 바
+    draw.rounded_rectangle([MARGIN, ty + 16, MARGIN + 90, ty + 24], radius=4, fill=OLIVE)
 
-    y = 190
-    draw.text((MARGIN, y), detail_title, font=font_title, fill=TEXT_MAIN)
-    y += 96
+    # 번호 카드들: 남은 높이 전체를 균등 분배
+    top = ty + 56
+    bottom = H - 120
+    gap = 16
+    row_h = (bottom - top - gap * (n - 1)) // n
+    row_h = min(row_h, 170)
+    # 남는 공간이 있으면 위쪽 여백으로 분배해 세로 중앙감 확보
+    used = row_h * n + gap * (n - 1)
+    top += max(0, (bottom - top - used) // 2)
 
-    for i, point in enumerate([p for p in detail_points if p], 1):
-        circle_r = 19
-        draw.ellipse([MARGIN, y, MARGIN + circle_r * 2, y + circle_r * 2], outline=ACCENT, width=3)
-        num_bbox = draw.textbbox((0, 0), str(i), font=font_num)
-        nw = num_bbox[2] - num_bbox[0]
-        draw.text((MARGIN + circle_r - nw / 2, y + circle_r - 21), str(i), font=font_num, fill=ACCENT)
+    num_w = 100
+    for i, point in enumerate(points):
+        y0 = top + i * (row_h + gap)
+        draw.rounded_rectangle([MARGIN, y0, W - MARGIN, y0 + row_h], radius=24, fill=CARD_BG, outline=(224, 214, 192), width=2)
+        draw.rounded_rectangle([MARGIN, y0 + 22, MARGIN + 7, y0 + row_h - 22], radius=3, fill=OLIVE)
 
-        wrapped = textwrap.wrap(point, width=17)
-        ty = y - 2
-        for line in wrapped:
-            draw.text((MARGIN + 60, ty), line, font=font_body, fill=TEXT_SUB)
-            ty += 44
-        y = max(ty, y + circle_r * 2 + 10) + 28
+        font_num = _font(FONT_SERIF, 56)
+        label = f"{i + 1:02d}"
+        nb = draw.textbbox((0, 0), label, font=font_num)
+        draw.text((MARGIN + 34, y0 + (row_h - (nb[3] - nb[1])) / 2 - nb[1]), label, font=font_num, fill=BURGUNDY)
+
+        text_x = MARGIN + 34 + num_w + 10
+        text_w = W - MARGIN - 28 - text_x
+        bsize = 34
+        while True:
+            font_body = _font(FONT_REGULAR, bsize)
+            blines = _wrap_px(draw, point, font_body, text_w)
+            lh = int(bsize * 1.4)
+            if len(blines) * lh <= row_h - 28 or bsize <= 24:
+                break
+            bsize -= 2
+        block_h = len(blines) * lh
+        by = y0 + (row_h - block_h) / 2 - (lh - bsize) / 2 + 2
+        for line in blines:
+            _draw_highlighted(draw, (text_x, by), line, font_body, INK)
+            by += lh
+
+    # 페이지 점 (2/3)
+    cx, cy = W // 2, H - 70
+    for k in range(3):
+        on = k == 1
+        r = 7
+        x = cx + (k - 1) * 26
+        draw.ellipse([x - r, cy - r, x + r, cy + r], fill=OLIVE if on else (205, 195, 172))
 
     img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
     return output_path
