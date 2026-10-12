@@ -3,6 +3,7 @@
 
 # 1) 뉴스 소스
 RSS_FEED_URL = "https://www.yna.co.kr/rss/news.xml"
+"https://www.yna.co.kr/rss/entertainment.xml"
 SOURCE_NAME = "연합뉴스"
 
 # 2) Instagram Graph API
