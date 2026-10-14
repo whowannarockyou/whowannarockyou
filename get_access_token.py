@@ -18,7 +18,7 @@ APP_ID = input("Instagram 앱 ID: ").strip()
 APP_SECRET = input("Instagram 앱 시크릿: ").strip()
 REDIRECT_URI = input("등록한 Redirect URI (예: https://yourname.github.io/insta-news-bot/): ").strip()
 
-SCOPES = "instagram_business_basic,instagram_business_content_publish"
+SCOPES = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 
 auth_url = (
     "https://www.instagram.com/oauth/authorize"

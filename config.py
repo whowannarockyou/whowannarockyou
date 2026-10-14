@@ -8,7 +8,7 @@ SOURCE_NAME = "연합뉴스"
 
 # 2) Instagram Graph API
 IG_USER_ID = "28052535914410541"
-IG_ACCESS_TOKEN = "IGAAVzhj61wWhBZAFk4Q2o4SkRvTmtXVndPckN5WlllZA05OZA1NXYkZAHeExGaDBYbzNZAbXNHQkJoUUhrNzFqd3BYOUxDMTVWc3gyRG5LTDRUeGVOSl91QWhqUUhkaV9TaDVLaU1oT2xFV3JJdVcxa192WDlB"
+IG_ACCESS_TOKEN = "IGAAVzhj61wWhBZAFlhZAHQ1eUFiQkROclNZAM0pTc1NqanIwUGxMTnpodU9OZAFI5eE55SDNIc1RQUFFuZAldtVGd2eTVabWVOblpiYWJqQmxfcWRJaHk1Uy02dEZA1MXZAWRmw2RTBjeld3Sl9zcjNLZAFQ5ejVn"
 
 # 3) 이미지 호스팅 (Cloudinary 무료 티어)
 # https://cloudinary.com 가입 → 대시보드에서 "Cloud name" 확인
@@ -45,3 +45,5 @@ TELEGRAM_CHAT_ID = "8466240463"
 # 이 시간 안에 사진 답장이 없으면 그 기사는 포기하고, 다른 새 기사 처리를 재개합니다.
 # (사진을 너무 늦게 보내면 그 동안 다른 뉴스도 아예 처리가 안 멈춰버리는 걸 방지)
 PENDING_PHOTO_TIMEOUT_MINUTES = 7  # 예: 360분 = 6시간, 30분으로 하려면 30
+
+FIRST_COMMENT = "💬 여러분의 생각은? 댓글로 남겨주세요!"

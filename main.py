@@ -41,7 +41,7 @@ from config import (
 from fetch_news import fetch_latest_articles
 from summarize import summarize_for_card, build_caption, pick_hottest_article
 from generate_card import generate_cover_card, generate_detail_card, generate_direction_card, generate_closing_card
-from post_instagram import upload_image, post_carousel
+from post_instagram import upload_image, post_carousel, post_comment
 from history import load_history, save_to_history
 from stock_image import search_related_photo
 from telegram_notify import send_message, check_for_photo_reply
@@ -118,6 +118,10 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
         access_token=IG_ACCESS_TOKEN,
     )
     print(f"  → 게시 완료! media_id: {media_id}")
+    first_comment = getattr(config, "FIRST_COMMENT", "")
+    if first_comment:
+        if post_comment(media_id, first_comment, IG_ACCESS_TOKEN):
+            print("  → 첫 댓글 작성 완료")
     save_to_history(link)
 
 

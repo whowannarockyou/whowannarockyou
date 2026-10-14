@@ -97,3 +97,26 @@ def post_carousel(image_urls: list[str], caption: str, ig_user_id: str, access_t
     )
     publish_resp.raise_for_status()
     return publish_resp.json()["id"]
+
+
+def post_comment(media_id: str, message: str, access_token: str) -> "str | None":
+    """게시물에 댓글을 답니다 (본인 게시물에 첫 댓글 용도).
+    instagram_business_manage_comments 권한이 필요합니다. 실패해도 예외를 던지지 않고 None을 반환합니다."""
+    if not message:
+        return None
+    try:
+        resp = requests.post(
+            f"{GRAPH_BASE}/{media_id}/comments",
+            data={"message": message, "access_token": access_token},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except Exception as e:
+        detail = ""
+        try:
+            detail = resp.text  # type: ignore[name-defined]
+        except Exception:
+            pass
+        print(f"[경고] 댓글 작성 실패 (게시물은 정상 게시됨): {e} {detail}")
+        return None
