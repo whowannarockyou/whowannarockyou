@@ -10,7 +10,7 @@
 import io
 import textwrap
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 CARD_SIZE = (1080, 1080)
 # 팔레트: 아이보리 + 버건디 메인, 올리브는 포인트로 소량
@@ -37,8 +37,8 @@ FONT_BOLD = "fonts/NanumGothicExtraBold.ttf"   # 없으면 NanumGothicBold.ttf�
 FONT_REGULAR = "fonts/NanumGothic.ttf"
 # 제목/숫자/브랜드용 명조(세리프) - 고급스러운 인상. 없으면 고딕 볼드로 자동 대체
 FONT_SERIF = "fonts/NanumMyeongjoBold.ttf"
-# 한글 제목용 모던 고딕. Pretendard SemiBold 권장(없으면 나눔고딕 볼드로 자동 대체)
-FONT_KO_TITLE = "fonts/Pretendard-SemiBold.otf"
+# 제목용 굵은 고딕. Pretendard ExtraBold 권장(없으면 Bold → 나눔고딕 ExtraBold 순으로 자동 대체)
+FONT_KO_TITLE = "fonts/Pretendard-ExtraBold.otf"
 
 
 def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
@@ -52,7 +52,7 @@ def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
         return f
     except OSError:
         if "Pretendard" in path:
-            for alt in ("fonts/Pretendard-Bold.otf", "fonts/NanumGothicBold.ttf", "fonts/NanumGothicExtraBold.ttf"):
+            for alt in ("fonts/Pretendard-Bold.otf", "fonts/Pretendard-SemiBold.otf", "fonts/NanumGothicExtraBold.ttf", "fonts/NanumGothicBold.ttf"):
                 try:
                     return ImageFont.truetype(alt, size)
                 except OSError:
@@ -179,6 +179,7 @@ def generate_cover_card(
     instagram_handle: str = "",
     tags: "list[str] | None" = None,
     local_image_path: "str | None" = None,
+    headline_highlight: str = "",
 ) -> str:
     """
     1번 슬라이드: 사진(있으면 전체 배경) + 아웃라인 태그 + 헤드라인 + 서브바.
@@ -215,34 +216,78 @@ def generate_cover_card(
 
     draw = ImageDraw.Draw(img)
 
-    font_tag = _font(FONT_BOLD, 25)
-    font_headline = MixedFont(_font(FONT_KO_TITLE, 66), _font(FONT_SERIF, 70), tracking=-1.5)
-    font_sub = _font(FONT_REGULAR, 29)
+    font_tag = _font(FONT_BOLD, 27)
+    font_sub = _font(FONT_REGULAR, 30)
     font_handle = _font(FONT_REGULAR, 22)
     font_source = _font(FONT_REGULAR, 18)
 
-    wrapped_headline = textwrap.wrap(headline, width=10)[:2]
-    line_h = 84
+    # 헤드라인: 굵은 고딕, 크게. 3줄 이내로 들어오도록 크기 자동 조절
+    text_w = W - MARGIN * 2
+    norm = " ".join(headline.split())
+    hsize = 104
+    while True:
+        font_headline = _font(FONT_KO_TITLE, hsize)
+        lines = _wrap_px(draw, norm, font_headline, text_w)
+        if len(lines) <= 3 and (len(lines) <= 2 or hsize <= 80) or hsize <= 64:
+            break
+        hsize -= 4
+    lines = lines[:3]
+    line_h = int(hsize * 1.22)
+
     bottom_y = H - 92                      # 핸들/출처 줄
     rule_y = bottom_y - 26                 # 얇은 구분선
     sub_y = rule_y - 70                    # 요약 한 줄
-    y_head = sub_y - 36 - len(wrapped_headline) * line_h
-    y_tag = y_head - 78
+    y_head = sub_y - 40 - len(lines) * line_h
+    y_tag = y_head - 84
 
     # 태그: 버건디 채움 pill (아이보리 글자)
     x_cursor = MARGIN
     for tag in (tags or ["오늘의 뉴스"]):
         tb = draw.textbbox((0, 0), tag, font=font_tag)
         tw, th = tb[2] - tb[0], tb[3] - tb[1]
-        draw.rounded_rectangle([x_cursor, y_tag, x_cursor + tw + 40, y_tag + th + 24], radius=28, fill=BURGUNDY)
-        draw.text((x_cursor + 20, y_tag + 10 - tb[1]), tag, font=font_tag, fill=IVORY)
-        x_cursor += tw + 40 + 12
+        draw.rounded_rectangle([x_cursor, y_tag, x_cursor + tw + 44, y_tag + th + 26], radius=30, fill=BURGUNDY)
+        draw.text((x_cursor + 22, y_tag + 11 - tb[1]), tag, font=font_tag, fill=IVORY)
+        x_cursor += tw + 44 + 12
 
-    # 헤드라인
+    # 헤드라인 그림자(가독성) → 형광펜 하이라이트 → 글자
+    h0 = norm.find(headline_highlight) if headline_highlight else -1
+    h1 = h0 + len(headline_highlight) if h0 >= 0 else -1
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
     y = y_head
-    for line in wrapped_headline:
-        _text(draw, (MARGIN, y), line, font_headline, TEXT_MAIN)
+    for line in lines:
+        sd.text((MARGIN + 2, y + 5), line, font=font_headline, fill=(0, 0, 0, 170))
         y += line_h
+    shadow = shadow.filter(ImageFilter.GaussianBlur(7))
+    img = Image.alpha_composite(img.convert("RGBA"), shadow).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    y = y_head
+    offset = 0
+    for line in lines:
+        l0, l1 = offset, offset + len(line)
+        seg0, seg1 = max(l0, h0), min(l1, h1)
+        hi = h0 >= 0 and seg0 < seg1
+        if hi:
+            x0 = MARGIN + draw.textlength(line[: seg0 - l0], font=font_headline)
+            x1 = MARGIN + draw.textlength(line[: seg1 - l0], font=font_headline)
+            pad = int(hsize * 0.10)
+            draw.rounded_rectangle(
+                [x0 - pad, y + int(hsize * 0.10), x1 + pad, y + int(hsize * 1.12)],
+                radius=int(hsize * 0.12), fill=IVORY,
+            )
+        if hi:
+            pre, mid, post = line[: seg0 - l0], line[seg0 - l0: seg1 - l0], line[seg1 - l0:]
+            x = MARGIN
+            draw.text((x, y), pre, font=font_headline, fill=TEXT_MAIN)
+            x += draw.textlength(pre, font=font_headline)
+            draw.text((x, y), mid, font=font_headline, fill=BURGUNDY)
+            x += draw.textlength(mid, font=font_headline)
+            draw.text((x, y), post, font=font_headline, fill=TEXT_MAIN)
+        else:
+            draw.text((MARGIN, y), line, font=font_headline, fill=TEXT_MAIN)
+        y += line_h
+        offset = l1 + 1  # 줄바꿈으로 사라진 공백 1칸
 
     # 요약 한 줄 + 올리브 세로선
     draw.rectangle([MARGIN, sub_y + 3, MARGIN + 5, sub_y + 38], fill=OLIVE_LIGHT)
@@ -382,9 +427,9 @@ def generate_detail_card(
 
     # 제목 (크게, 최대 2줄, 마지막 줄 강조색)
     inner_w = W - MARGIN * 2
-    tsize = 66
+    tsize = 76
     while True:
-        font_title = MixedFont(_font(FONT_KO_TITLE, tsize - 2), _font(FONT_SERIF, tsize), tracking=-1.5)
+        font_title = _font(FONT_KO_TITLE, tsize)
         tlines = _wrap_px(draw, detail_title, font_title, inner_w)
         if len(tlines) <= 2 or tsize <= 48:
             break
@@ -396,10 +441,10 @@ def generate_detail_card(
         _text(draw, (MARGIN, ty), line, font_title, fill)
         ty += int(tsize * 1.28)
     # 제목 아래 포인트 바
-    draw.rounded_rectangle([MARGIN, ty + 16, MARGIN + 90, ty + 24], radius=4, fill=OLIVE)
+    draw.rounded_rectangle([MARGIN, ty + 26, MARGIN + 90, ty + 34], radius=4, fill=OLIVE)
 
     # 번호 카드들: 남은 높이 전체를 균등 분배
-    top = ty + 56
+    top = ty + 66
     bottom = H - 120
     gap = 16
     row_h = (bottom - top - gap * (n - 1)) // n
@@ -414,7 +459,7 @@ def generate_detail_card(
         draw.rounded_rectangle([MARGIN, y0, W - MARGIN, y0 + row_h], radius=24, fill=CARD_BG, outline=(224, 214, 192), width=2)
         draw.rounded_rectangle([MARGIN, y0 + 22, MARGIN + 7, y0 + row_h - 22], radius=3, fill=OLIVE)
 
-        font_num = _font(FONT_SERIF, 56)
+        font_num = _font(FONT_KO_TITLE, 54)
         label = f"{i + 1:02d}"
         nb = draw.textbbox((0, 0), label, font=font_num)
         draw.text((MARGIN + 34, y0 + (row_h - (nb[3] - nb[1])) / 2 - nb[1]), label, font=font_num, fill=BURGUNDY)
@@ -469,9 +514,9 @@ def generate_direction_card(
     draw.text((MARGIN + 22, 120 + 11 - tb[1]), tag_text, font=font_tag, fill=BURGUNDY)
 
     # 제목 (최대 2줄)
-    tsize = 66
+    tsize = 76
     while True:
-        font_title = MixedFont(_font(FONT_KO_TITLE, tsize - 2), _font(FONT_SERIF, tsize), tracking=-1.5)
+        font_title = _font(FONT_KO_TITLE, tsize)
         tlines = _wrap_px(draw, direction_title, font_title, inner_w)
         if len(tlines) <= 2 or tsize <= 48:
             break
@@ -480,14 +525,14 @@ def generate_direction_card(
     for line in tlines[:2]:
         _text(draw, (MARGIN, ty), line, font_title, TEXT_MAIN)
         ty += int(tsize * 1.28)
-    draw.rounded_rectangle([MARGIN, ty + 16, MARGIN + 90, ty + 24], radius=4, fill=OLIVE_LIGHT)
+    draw.rounded_rectangle([MARGIN, ty + 26, MARGIN + 90, ty + 34], radius=4, fill=OLIVE_LIGHT)
 
     # 포인트: 카드 없이 큰 번호 + 본문 + 얇은 구분선, 남은 높이에 균등 분배
-    top = ty + 70
+    top = ty + 80
     bottom = H - 130
     row_h = min((bottom - top) // n, 220)
     top += max(0, ((bottom - top) - row_h * n) // 2)
-    font_num = _font(FONT_SERIF, 64)
+    font_num = _font(FONT_KO_TITLE, 62)
     for i, point in enumerate(points):
         y0 = top + i * row_h
         if i > 0:

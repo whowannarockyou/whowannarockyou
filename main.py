@@ -64,6 +64,7 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
         output_path=cover_path,
         instagram_handle=INSTAGRAM_HANDLE,
         tags=[content.get("tag", "주목")],
+        headline_highlight=content.get("headline_highlight", ""),
     )
 
     print("[카드 생성] 상세 카드(설명) 생성 중...")

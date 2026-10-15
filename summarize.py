@@ -47,6 +47,8 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
     유머를 절대 쓰지 말고 (a) 또는 (b)로 진지하게 작성할 것.
   14자 내외로 짧게, 원제목을 그대로 베끼지 말 것. 과장은 하되 기사에 없는 사실을 지어내거나 왜곡하지는 말 것
   (낚시성 거짓 정보 금지, 어디까지나 사실 기반의 강조와 재치).
+- headline_highlight: headline 안에 **글자 그대로** 들어 있는 핵심 키워드 하나(2~6자). 카드에서 형광펜 하이라이트로 강조됨.
+  (예: headline이 "아프리카에 F1이 돌아온다!"면 "F1이" 또는 "돌아온다!", 숫자/핵심 명사/반전 포인트를 고를 것). 반드시 headline에 그대로 포함된 문자열일 것.
 - bullets: 핵심만 담은 3개의 아주 짧은 문장 (각 20자 이내)
 - detail_title: 2번째 슬라이드용 소제목, "무엇이 달라지나요?" 같은 궁금증 유발형 (12자 내외)
 - detail_points: 배경/맥락/영향 등을 조금 더 자세히 풀어쓴 4개 문장 (각 40자 이내, 존댓말)
@@ -94,7 +96,7 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
   작품·공연·앨범·방송 소식처럼 밝은 소재는 유머형 후킹도 가능. 연예/문화 기사는 direction_points를 빈 리스트([])로 둘 것.
 - 반드시 아래 JSON 형식으로만 답해. 다른 설명 붙이지 마.
 
-{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "image_queries_alt": ["...", "..."], "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
+{{"headline": "...", "headline_highlight": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "image_queries_alt": ["...", "..."], "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
 """
 
     response = client.messages.create(
@@ -112,6 +114,7 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
         # 실패 시 안전한 fallback
         return {
             "headline": title[:20],
+            "headline_highlight": "",
             "bullets": [clean_summary[:20], "", ""],
             "detail_title": "자세히 보기",
             "detail_points": [clean_summary[:40], "", "", ""],
