@@ -88,18 +88,29 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
   반드시 기사 내용(쟁점, 절차, 일정, 이해관계)에서 논리적으로 이어지는 것만 쓰고, 기사에 없는 사실이나 수치를 지어내지 말 것.
   단정 대신 "~이 관건입니다", "~여부를 지켜봐야 합니다", "~할 필요가 있습니다" 같은 표현을 쓸 것.
   개인(실존 인물)을 비난·비하하는 표현 금지. 애매하면 만들지 말고 빈 리스트로 둘 것.
+- caption: 인스타그램 게시물 본문(캡션). 딱딱한 기사 요약이 아니라 **친구에게 말해주듯 자연스러운 글**로 쓸 것.
+  - 첫 줄: 스크롤 멈추게 하는 훅 한 줄 (질문이나 한마디). 기사 제목이나 headline을 그대로 복사하지 말 것. 이모지 가능.
+  - 이어서 짧은 문단 3~4개 (각 1~2문장, 문단 사이 빈 줄). "~해요", "~했어요", "~거든요" 같은 부드러운 해요체.
+    "~했습니다", "~것으로 알려졌습니다" 같은 보도체와 개조식(· 불릿)은 쓰지 말 것.
+    어려운 용어는 쉬운 말로 풀어 쓰고, 왜 중요한지 한 번은 짚어줄 것.
+  - 기사에 있는 사실만 쓸 것. 수치·이름·기관명은 정확히, 없는 내용을 지어내거나 추측해서 단정하지 말 것.
+  - outlook이 있으면 마지막 문단에 자연스럽게 녹일 것 ("앞으로는 ~ 지켜봐야 해요" 식).
+  - 마지막 줄: 독자에게 가볍게 던지는 질문 한 줄 (댓글 유도). 정치·사건 기사에서는 특정 정당/인물 편을 들게 하는 질문 금지
+    ("여러분은 어떻게 보세요?" 수준으로).
+  - 사망·사고·재난·피해자가 있는 기사, 연예인 사생활·의혹 기사는 이모지 없이 차분한 톤으로.
+  - 전체 400자 안팎, 이모지는 3개 이하. 해시태그·링크·출처 표기는 넣지 말 것 (출처는 코드가 따로 붙임).
 - 연예/문화 기사 주의사항: 연예인·방송·콘텐츠 기사는 반드시 기사에 확인된 사실만 쓸 것.
   열애·결혼·이혼·사생활·루머·의혹·소송·사건사고 관련 내용은 추측이나 단정 없이 기사에 나온 표현 수준으로만 전하고,
   유머/조롱 톤은 쓰지 말 것. 사망·질병 소식은 애도하는 차분한 톤으로 쓸 것.
   작품·공연·앨범·방송 소식처럼 밝은 소재는 유머형 후킹도 가능. 연예/문화 기사는 direction_points를 빈 리스트([])로 둘 것.
 - 반드시 아래 JSON 형식으로만 답해. 다른 설명 붙이지 마.
 
-{{"headline": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "image_queries_alt": ["...", "..."], "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
+{{"headline": "...", "caption": "...", "bullets": ["...", "...", "..."], "detail_title": "...", "detail_points": ["...", "...", "...", "..."], "image_query": "...", "image_queries_alt": ["...", "..."], "tag": "...", "is_person_focused": false, "outlook": "...", "direction_title": "...", "direction_points": ["...", "...", "..."]}}
 """
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1400,
+        max_tokens=2200,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -114,6 +125,7 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
               f"응답이 중간에 잘렸을 수 있습니다. 응답 끝부분: ...{text[-80:]}")
         return {
             "headline": title[:20],
+            "caption": "",
             "bullets": [clean_summary[:20], "", ""],
             "detail_title": "자세히 보기",
             "detail_points": [clean_summary[:40], "", "", ""],
@@ -134,8 +146,13 @@ def build_caption(
     bullets: "list[str] | None" = None,
     detail_points: "list[str] | None" = None,
     outlook: str = "",
+    caption_body: str = "",
 ) -> str:
     """게시물 본문(캡션)을 만듭니다. 기사 제목 + 핵심 요약 + 상세 설명 + 앞으로의 전망 + 출처/링크."""
+    if caption_body:
+        # Claude가 쓴 자연스러운 본문이 있으면 그대로 쓰고 출처만 붙임
+        return f"{caption_body.strip()}\n\n📷 {source_name}"
+
     lines = [article_title, ""]
 
     for b in (bullets or []):

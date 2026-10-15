@@ -108,6 +108,7 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
         bullets=content.get("bullets"),
         detail_points=content.get("detail_points"),
         outlook=content.get("outlook", ""),
+        caption_body=content.get("caption", ""),
     )
     if photo_attribution:
         caption += f"\n{photo_attribution}"
