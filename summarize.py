@@ -110,6 +110,8 @@ def summarize_for_card(title: str, raw_summary: str) -> dict:
         return json.loads(text)
     except json.JSONDecodeError:
         # 실패 시 안전한 fallback
+        print(f"[경고] Claude 응답을 JSON으로 읽지 못해 기본값으로 대체합니다 (응답 길이 {len(text)}자). "
+              f"응답이 중간에 잘렸을 수 있습니다. 응답 끝부분: ...{text[-80:]}")
         return {
             "headline": title[:20],
             "bullets": [clean_summary[:20], "", ""],

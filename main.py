@@ -206,6 +206,8 @@ def run():
 
     print("[3/4] Claude로 카드뉴스 콘텐츠 생성 중...")
     content = summarize_for_card(target.title, target.summary)
+    print(f"  → 앞으로의 전망(outlook): {'있음' if content.get('outlook') else '없음 (기사에 후속 일정/절차 언급이 없거나 응답 생성 실패)'}")
+    print(f"  → 앞으로 지켜볼 점 슬라이드: {'만듦' if content.get('direction_points') else '건너뜀'}")
 
     # ── 3) 특정 인물 중심 기사면 자동 게시 대신 텔레그램으로 확인 요청 ──
     if content.get("is_person_focused"):
