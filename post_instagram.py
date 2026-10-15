@@ -120,3 +120,31 @@ def post_comment(media_id: str, message: str, access_token: str) -> "str | None"
             pass
         print(f"[경고] 댓글 작성 실패 (게시물은 정상 게시됨): {e} {detail}")
         return None
+
+
+def post_story(image_url: str, ig_user_id: str, access_token: str) -> "str | None":
+    """이미지 1장을 스토리로 올립니다 (9:16, JPEG 권장). 실패해도 예외 없이 None 반환.
+    ※ API로는 링크/투표 등 스티커를 붙일 수 없고 이미지만 올라갑니다."""
+    step = "컨테이너 생성"
+    last = None
+    try:
+        last = requests.post(
+            f"{GRAPH_BASE}/{ig_user_id}/media",
+            data={"image_url": image_url, "media_type": "STORIES", "access_token": access_token},
+            timeout=30,
+        )
+        last.raise_for_status()
+        creation_id = last.json()["id"]
+        step = "게시"
+        time.sleep(5)
+        last = requests.post(
+            f"{GRAPH_BASE}/{ig_user_id}/media_publish",
+            data={"creation_id": creation_id, "access_token": access_token},
+            timeout=30,
+        )
+        last.raise_for_status()
+        return last.json().get("id")
+    except Exception as e:
+        body = last.text if last is not None else ""
+        print(f"[경고] 스토리 업로드 실패 ({step} 단계): {e}\n  응답 내용: {body}")
+        return None

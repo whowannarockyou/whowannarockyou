@@ -47,3 +47,5 @@ TELEGRAM_CHAT_ID = "8466240463"
 PENDING_PHOTO_TIMEOUT_MINUTES = 7  # 예: 360분 = 6시간, 30분으로 하려면 30
 
 FIRST_COMMENT = "💬 여러분의 생각은? 댓글로 남겨주세요!"
+
+AUTO_STORY = True

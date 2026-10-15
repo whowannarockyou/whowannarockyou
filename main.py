@@ -40,8 +40,8 @@ from config import (
 )
 from fetch_news import fetch_latest_articles
 from summarize import summarize_for_card, build_caption, pick_hottest_article
-from generate_card import generate_cover_card, generate_detail_card, generate_direction_card, generate_closing_card
-from post_instagram import upload_image, post_carousel, post_comment
+from generate_card import generate_cover_card, generate_detail_card, generate_direction_card, generate_closing_card, generate_story_card
+from post_instagram import upload_image, post_carousel, post_comment, post_story
 from history import load_history, save_to_history
 from stock_image import search_related_photo
 from telegram_notify import send_message, check_for_photo_reply
@@ -122,6 +122,17 @@ def _build_and_post(title, link, content, image_url=None, local_image_path=None,
     if first_comment:
         if post_comment(media_id, first_comment, IG_ACCESS_TOKEN):
             print("  → 첫 댓글 작성 완료")
+
+    # 스토리 자동 업로드 (config.py에 AUTO_STORY = True 일 때만)
+    if getattr(config, "AUTO_STORY", False):
+        try:
+            story_path = f"output/story_{slug}.jpg"
+            generate_story_card(cover_path, story_path, instagram_handle=INSTAGRAM_HANDLE)
+            story_url = upload_image(story_path, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET)
+            if post_story(story_url, IG_USER_ID, IG_ACCESS_TOKEN):
+                print("  → 스토리 업로드 완료")
+        except Exception as e:
+            print(f"[경고] 스토리 생성/업로드 실패 (게시물은 정상 게시됨): {e}")
     save_to_history(link)
 
 

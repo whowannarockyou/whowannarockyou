@@ -524,3 +524,48 @@ def generate_direction_card(
 
     img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
     return output_path
+
+
+def generate_story_card(
+    cover_path: str,
+    output_path: str,
+    instagram_handle: str = "",
+    label: str = "NEW POST",
+) -> str:
+    """스토리용 9:16(1080x1920) 이미지: 커버 카드를 가운데 놓고 위아래를 브랜드 배경으로 채웁니다.
+    스토리 UI가 가리는 상단/하단 약 250px 안쪽은 비워 둡니다."""
+    SW, SH = 1080, 1920
+    img = Image.new("RGB", (SW, SH), BG_TOP)
+    d = ImageDraw.Draw(img)
+    for y in range(SH):
+        t = y / SH
+        d.line([(0, y), (SW, y)], fill=tuple(int(BG_TOP[i] + (BG_BOTTOM[i] - BG_TOP[i]) * t) for i in range(3)))
+
+    cover = Image.open(cover_path).convert("RGB")
+    cw = SW
+    ch = int(cover.height * cw / cover.width)
+    cover = cover.resize((cw, ch), Image.LANCZOS)
+    cy = (SH - ch) // 2
+    img.paste(cover, (0, cy))
+    d.rectangle([0, cy - 5, SW, cy - 1], fill=OLIVE)
+    d.rectangle([0, cy + ch, SW, cy + ch + 4], fill=OLIVE)
+
+    # 상단 라벨 (안전영역 안쪽)
+    font_label = _font(FONT_SERIF, 54)
+    lw = d.textlength(label, font=font_label)
+    d.text(((SW - lw) / 2, 270), label, font=font_label, fill=IVORY)
+    d.rounded_rectangle([SW / 2 - 45, 352, SW / 2 + 45, 360], radius=4, fill=OLIVE_LIGHT)
+
+    # 하단 안내 + 핸들
+    font_cta = _font(FONT_BOLD, 38)
+    cta = "피드에서 전체 카드 보기"
+    cw2 = d.textlength(cta, font=font_cta)
+    d.text(((SW - cw2) / 2, 1565), cta, font=font_cta, fill=IVORY)
+    if instagram_handle:
+        font_h = _font(FONT_REGULAR, 30)
+        ht = f"@{instagram_handle}"
+        hw = d.textlength(ht, font=font_h)
+        d.text(((SW - hw) / 2, 1630), ht, font=font_h, fill=(205, 190, 170))
+
+    img.save(output_path, format="JPEG", quality=100, subsampling=0, optimize=True)
+    return output_path
